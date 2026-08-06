@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  AGENCY_OWNER
+  OFFICE_MANAGER
+  PROPERTY_MANAGER
+  AGENT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum AgencyStatus {
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  TRIAL
+}
+
+// ─── MODELS ──────────────────────────────────────────────────────────────────
+
+model SubscriptionPlan {
+  id                    String   @id @default(uuid())
+  name                  String   // Starter, Professional, Enterprise
+  price                 Float    @default(0.0)
+  maxSeats              Int      @default(5)
+  maxListings           Int      @default(150)
+  maxStorageGB          Float    @default(20.0)
+
+  hasDealsCommission   Boolean  @default(false)
+  hasCustomRoles       Boolean  @default(false)
+  hasPortalSyndication Boolean  @default(false)
+  hasWhiteLabel        Boolean  @default(false)
+  hasApiAccess         Boolean  @default(false)
+  hasAuditLogSSO       Boolean  @default(false)
+  hasAdvancedAnalytics Boolean  @default(false)
+
+  agencies              Agency[]
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("subscription_plans")
+}
+
+model Agency {
+  id                 String           @id @default(uuid())
+  name               String
+  slug               String           @unique
+  city               String           @default("Karachi")
+  ownerName          String?
+  status             AgencyStatus     @default(TRIAL)
+  seatsCount         Int              @default(1)
+  storageUsedGB      Float            @default(0.0)
+  renewsAt           DateTime?
+  mrr                Float            @default(0.0)
+
+  subscriptionPlanId String?
+  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+
+  users              User[]
+
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@map("agencies")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  agencyId     String?
+  agency       Agency?    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  name         String
+  email        String     @unique
+  password     String
+  role         Role       @default(AGENT)
+  status       UserStatus @default(ACTIVE)
+  lastSeen     DateTime?
+  avatar       String?
+  refreshToken String?    @db.Text
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([agencyId])
+  @@index([email])
+  @@map("users")
+}
+  
