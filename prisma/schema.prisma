@@ -29,16 +29,26 @@ enum AgencyStatus {
   TRIAL
 }
 
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
 // ─── MODELS ──────────────────────────────────────────────────────────────────
 
 model SubscriptionPlan {
   id                    String   @id @default(uuid())
-  name                  String   // Starter, Professional, Enterprise
-  price                 Float    @default(0.0)
+  name                  String   @unique
+  description           String?  @db.Text
+
+  monthlyPrice          Float    @default(0.0)
+  yearlyPrice           Float    @default(0.0)
+
   maxSeats              Int      @default(5)
   maxListings           Int      @default(150)
   maxStorageGB          Float    @default(20.0)
 
+  // Feature Flags
   hasDealsCommission   Boolean  @default(false)
   hasCustomRoles       Boolean  @default(false)
   hasPortalSyndication Boolean  @default(false)
@@ -46,6 +56,11 @@ model SubscriptionPlan {
   hasApiAccess         Boolean  @default(false)
   hasAuditLogSSO       Boolean  @default(false)
   hasAdvancedAnalytics Boolean  @default(false)
+
+  // Stripe Integration
+  stripeProductId        String?
+  stripePriceIdMonthly  String?
+  stripePriceIdYearly   String?
 
   agencies              Agency[]
 
@@ -62,6 +77,7 @@ model Agency {
   city               String           @default("Karachi")
   ownerName          String?
   status             AgencyStatus     @default(TRIAL)
+  billingCycle       BillingCycle     @default(MONTHLY)
   seatsCount         Int              @default(1)
   storageUsedGB      Float            @default(0.0)
   renewsAt           DateTime?
@@ -99,4 +115,37 @@ model User {
   @@index([email])
   @@map("users")
 }
-  
+
+model SystemSetting {
+  id                    String   @id @default("default-settings")
+  trialLengthDays       Int      @default(14)
+  defaultPlanName       String   @default("Starter")
+  dataRegion            String   @default("eu-north-1")
+  uploadCapMB           Int      @default(25)
+
+  // AWS S3 Settings & Keys
+  s3Enabled             Boolean  @default(true)
+  awsAccessKeyId        String?  @db.Text
+  awsSecretAccessKey    String?  @db.Text
+  awsRegion             String   @default("eu-north-1")
+  awsBucket             String   @default("freehold-crm-storage")
+
+  // Stripe Settings & Keys
+  stripeEnabled         Boolean  @default(true)
+  stripePublicKey       String?  @db.Text
+  stripeSecretKey       String?  @db.Text
+  stripeWebhookSecret   String?  @db.Text
+
+  // Amazon SES Email Settings & Keys
+  sesEnabled            Boolean  @default(true)
+  sesAccessKeyId        String?  @db.Text
+  sesSecretAccessKey    String?  @db.Text
+  sesRegion             String   @default("eu-north-1")
+  sesSenderEmail        String   @default("no-reply@freehold.app")
+
+  isMaintenanceMode     Boolean  @default(false)
+
+  updatedAt             DateTime @updatedAt
+
+  @@map("system_settings")
+}

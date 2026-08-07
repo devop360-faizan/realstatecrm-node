@@ -1,17 +1,21 @@
-const prisma = require('../config/db.config');
-const ApiError = require('../utils/ApiError');
-const { StatusCodes } = require('http-status-codes');
+const prisma = require("../config/db.config");
+const ApiError = require("../utils/ApiError");
+const { StatusCodes } = require("http-status-codes");
 
 class AdminUserService {
   /**
    * Get all accounts across all agencies with search, role & status filters
    */
-  async getAllUsers({ search, role, status, page = 1, limit = 12 }) {
+  async getAllUsers({ search, role, status, page = 1, limit = 10 }) {
     page = Math.max(1, parseInt(page));
     limit = Math.min(100, Math.max(1, parseInt(limit)));
     const skip = (page - 1) * limit;
 
-    const where = {};
+    const where = {
+      role: {
+        not: "SUPER_ADMIN",
+      },
+    };
 
     if (role) {
       where.role = role.toUpperCase();
@@ -45,7 +49,7 @@ class AdminUserService {
             select: { id: true, name: true },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       prisma.user.count({ where }),
     ]);
@@ -54,7 +58,7 @@ class AdminUserService {
       id: u.id,
       name: u.name,
       email: u.email,
-      agency: u.agency?.name || 'Platform (Super Admin)',
+      agency: u.agency?.name || "Platform (Super Admin)",
       role: u.role,
       status: u.status,
       lastSeen: u.lastSeen,
@@ -74,12 +78,91 @@ class AdminUserService {
   }
 
   /**
+   * Export all users as CSV string
+   */
+  async exportUsersCSV({ search, role, status }) {
+    const where = {
+      role: {
+        not: "SUPER_ADMIN",
+      },
+    };
+
+    if (role) where.role = role.toUpperCase();
+    if (status) where.status = status.toUpperCase();
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { agency: { name: { contains: search } } },
+      ];
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        lastSeen: true,
+        createdAt: true,
+        agency: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const headers = ["Index", "Name", "Email", "Agency", "Role", "Status", "Last Seen", "Joined Date"];
+    const rows = users.map((u, idx) => [
+      idx + 1,
+      `"${u.name.replace(/"/g, '""')}"`,
+      `"${u.email.replace(/"/g, '""')}"`,
+      `"${(u.agency?.name || 'Platform').replace(/"/g, '""')}"`,
+      u.role,
+      u.status,
+      u.lastSeen ? new Date(u.lastSeen).toISOString() : 'Never',
+      new Date(u.createdAt).toISOString().split('T')[0],
+    ]);
+
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  }
+
+  async getSingleUserById(id) {
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        lastSeen: true,
+        avatar: true,
+        createdAt: true,
+        agency: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+    if (!user) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "User not found");
+    }
+    return user;
+  }
+
+  /**
    * Suspend or Activate user account
    */
   async updateStatus(id, status) {
-    const validStatuses = ['ACTIVE', 'SUSPENDED'];
+    const validStatuses = ["ACTIVE", "SUSPENDED"];
     if (!validStatuses.includes(status.toUpperCase())) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid status. Must be ACTIVE or SUSPENDED');
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Invalid status. Must be ACTIVE or SUSPENDED",
+      );
     }
 
     const user = await prisma.user.update({

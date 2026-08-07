@@ -77,9 +77,8 @@ class AuthService {
 
     const refreshToken = jwt.sign(
       payload,
-      process.env.JWT_REFRESH_SECRET ||
-        "CHANGE_ME_32_CHARS_REFRESH_SECRET_HERE",
-      { expiresIn: process.env.JWT_REFRESH_EXPIRY || "7d" },
+      process.env.JWT_REFRESH_SECRET || "CHANGE_ME_32_CHARS_REFRESH_SECRET_HERE",
+      { expiresIn: process.env.JWT_REFRESH_EXPIRY || "30d" },
     );
 
     return { accessToken, refreshToken };
