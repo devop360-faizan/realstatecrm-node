@@ -38,7 +38,7 @@ class AdminAgencyService {
         take: limit,
         include: {
           subscriptionPlan: {
-            select: { id: true, name: true, price: true },
+            select: { id: true, name: true, monthlyPrice: true },
           },
           _count: {
             select: { users: true },
@@ -56,13 +56,13 @@ class AdminAgencyService {
       city: a.city,
       ownerName: a.ownerName || "Unassigned",
       plan: a.subscriptionPlan?.name || "Starter",
-      price: a.subscriptionPlan?.price || 99,
+      price: a.subscriptionPlan?.monthlyPrice || 99,
       status: a.status,
       seats: a.seatsCount || a._count.users || 1,
       listings: 0,
       storageGB: a.storageUsedGB || 0.0,
       renewsAt: a.renewsAt || null,
-      mrr: a.mrr || a.subscriptionPlan?.price || 99,
+      mrr: a.mrr || a.subscriptionPlan?.monthlyPrice || 99,
       createdAt: a.createdAt,
     }));
 
@@ -170,7 +170,7 @@ class AdminAgencyService {
           slug,
           city: city || "Karachi",
           ownerName: ownerName || "Agency Owner",
-          subscriptionPlanId: planId || "starter-plan-uuid",
+          subscriptionPlanId: planId || null,
           status: "ACTIVE",
         },
         include: {

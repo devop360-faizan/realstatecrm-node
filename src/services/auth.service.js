@@ -57,6 +57,7 @@ class AuthService {
         avatar: user.avatar,
         lastSeen: new Date(),
       },
+      tokenType: "Bearer",
       ...tokens,
     };
   }
@@ -77,11 +78,60 @@ class AuthService {
 
     const refreshToken = jwt.sign(
       payload,
-      process.env.JWT_REFRESH_SECRET || "CHANGE_ME_32_CHARS_REFRESH_SECRET_HERE",
+      process.env.JWT_REFRESH_SECRET ||
+        "CHANGE_ME_32_CHARS_REFRESH_SECRET_HERE",
       { expiresIn: process.env.JWT_REFRESH_EXPIRY || "30d" },
     );
 
     return { accessToken, refreshToken };
+  }
+
+  async logout(userId) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshToken: null,
+      },
+    });
+  }
+
+  async updateProfile(userId, data) {
+    const { name, avatar } = data || {};
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (avatar) updateData.avatar = avatar;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    });
+
+    delete updatedUser.password;
+    delete updatedUser.refreshToken;
+    return updatedUser;
+  }
+
+  async changePassword(userId, data) {
+    const { currentPassword, newPassword, confirmPassword } = data || {};
+    
+    if (newPassword !== confirmPassword) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "New password and confirm password do not match");
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Incorrect current password");
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
   }
 }
 

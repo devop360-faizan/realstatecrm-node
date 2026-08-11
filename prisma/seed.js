@@ -83,7 +83,96 @@ async function main() {
     },
   });
 
+  // 3. Seed Vocabularies
+  console.log("🌱 Seeding Vocabularies...");
+
+  // Property Types
+  const types = [
+    { name: "Residential", slug: "residential" },
+    { name: "Commercial", slug: "commercial" },
+    { name: "Agricultural", slug: "agricultural" },
+    { name: "Industrial", slug: "industrial", status: "INACTIVE" },
+  ];
+
+  for (const t of types) {
+    await prisma.propertyType.upsert({
+      where: { slug: t.slug },
+      update: {},
+      create: t,
+    });
+  }
+  const residentialType = await prisma.propertyType.findUnique({ where: { slug: "residential" } });
+  const commercialType = await prisma.propertyType.findUnique({ where: { slug: "commercial" } });
+
+  // Categories
+  const categories = [
+    { name: "Apartment", slug: "apartment", propertyTypeId: residentialType.id },
+    { name: "House", slug: "house", propertyTypeId: residentialType.id },
+    { name: "Plot", slug: "plot", propertyTypeId: residentialType.id },
+    { name: "Office", slug: "office", propertyTypeId: commercialType.id },
+    { name: "Shop", slug: "shop", propertyTypeId: commercialType.id },
+  ];
+
+  for (const c of categories) {
+    await prisma.propertyCategory.upsert({
+      where: { slug: c.slug },
+      update: {},
+      create: c,
+    });
+  }
+
+  // Listing Statuses
+  const statuses = [
+    { name: "Available", slug: "available", colorCode: "#22C55E" },
+    { name: "Sold", slug: "sold", colorCode: "#EF4444" },
+    { name: "Rented", slug: "rented", colorCode: "#3B82F6" },
+    { name: "Off-Market", slug: "off-market", colorCode: "#6B7280" },
+  ];
+
+  for (const s of statuses) {
+    await prisma.listingStatus.upsert({
+      where: { slug: s.slug },
+      update: {},
+      create: s,
+    });
+  }
+
+  // Amenities
+  const amenities = [
+    { name: "Swimming Pool", slug: "swimming-pool" },
+    { name: "Gym", slug: "gym" },
+    { name: "Backup Generator", slug: "backup-generator" },
+    { name: "Security Staff", slug: "security-staff" },
+    { name: "Elevator", slug: "elevator" },
+  ];
+
+  for (const a of amenities) {
+    await prisma.amenity.upsert({
+      where: { slug: a.slug },
+      update: {},
+      create: a,
+    });
+  }
+
+  // Lead Sources
+  const sources = [
+    { name: "Zameen.com", slug: "zameen-com" },
+    { name: "Graana", slug: "graana" },
+    { name: "Facebook", slug: "facebook" },
+    { name: "Walk-in", slug: "walk-in" },
+    { name: "Referral", slug: "referral" },
+  ];
+
+  for (const src of sources) {
+    await prisma.leadSource.upsert({
+      where: { slug: src.slug },
+      update: {},
+      create: src,
+    });
+  }
+
   console.log(`✅ Super Admin Seeded: ${superAdmin.email}`);
+  console.log("✅ Vocabularies Seeded");
   console.log("🎉 Seeding Completed!");
 }
 

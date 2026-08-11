@@ -37,6 +37,10 @@ const authenticate = asyncHandler(async (req, _res, next) => {
     throw new ApiError(StatusCodes.UNAUTHORIZED, "User not found or suspended");
   }
 
+  if (!user.refreshToken) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Session expired or user logged out");
+  }
+
   delete user.password;
   delete user.refreshToken;
 

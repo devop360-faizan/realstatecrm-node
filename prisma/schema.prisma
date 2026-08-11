@@ -34,6 +34,63 @@ enum BillingCycle {
   YEARLY
 }
 
+enum ItemStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ListingType {
+  SALE
+  RENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ClientType {
+  BUYER
+  SELLER
+  LANDLORD
+  TENANT
+  INVESTOR
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  VIEWING
+  NEGOTIATING
+  WON
+  LOST
+}
+
+enum DealStage {
+  OFFER_RECEIVED
+  NEGOTIATION
+  AGREEMENT
+  PAYMENT
+  CLOSED
+}
+
+enum ViewingStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum EntityType {
+  PROPERTY
+  CLIENT
+  DEAL
+  VIEWING
+}
+
 // ─── MODELS ──────────────────────────────────────────────────────────────────
 
 model SubscriptionPlan {
@@ -87,6 +144,11 @@ model Agency {
   subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
 
   users              User[]
+  properties         Property[]
+  clients            Client[]
+  deals              Deal[]
+  viewings           Viewing[]
+  documents          Document[]
 
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
@@ -107,6 +169,14 @@ model User {
   lastSeen     DateTime?
   avatar       String?
   refreshToken String?    @db.Text
+
+  createdProperties   Property[] @relation("PropertyCreator")
+  assignedProperties  Property[] @relation("PropertyAssignee")
+  assignedClients     Client[]   @relation("ClientAssignee")
+  assignedDeals       Deal[]     @relation("DealAssignee")
+  assignedViewings    Viewing[]  @relation("ViewingAssignee")
+  uploadedDocuments   Document[] @relation("DocumentUploader")
+  activities          ActivityLog[]
 
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -148,4 +218,316 @@ model SystemSetting {
   updatedAt             DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+
+model PropertyType {
+  id         String             @id @default(uuid())
+  name       String             @unique // e.g. Residential, Commercial
+  slug       String             @unique
+  status     ItemStatus         @default(ACTIVE) // ACTIVE or INACTIVE
+  categories PropertyCategory[]
+  properties Property[]
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  @@map("property_types")
+}
+
+model PropertyCategory {
+  id             String       @id @default(uuid())
+  name           String       // e.g. Apartment, House, Plot
+  slug           String       @unique
+  status         ItemStatus   @default(ACTIVE)
+  
+  propertyTypeId String
+  propertyType   PropertyType @relation(fields: [propertyTypeId], references: [id], onDelete: Cascade)
+  properties     Property[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("property_categories")
+}
+
+
+model ListingStatus {
+  id        String   @id @default(uuid())
+  name      String   @unique // e.g. Active, Sold, Off-Market
+  slug      String   @unique
+  colorCode String?  // e.g. #FF0000
+  status    ItemStatus @default(ACTIVE)
+  properties Property[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("listing_statuses")
+}
+
+
+model Amenity {
+  id        String   @id @default(uuid())
+  name      String   @unique // e.g. Swimming Pool, Gym
+  slug      String   @unique
+  icon      String?  
+  status    ItemStatus @default(ACTIVE)
+  properties PropertyAmenity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("amenities")
+}
+
+model LeadSource {
+  id        String   @id @default(uuid())
+  name      String   @unique // e.g. Zameen.com, Graana, Walk-in
+  slug      String   @unique
+  status    ItemStatus @default(ACTIVE)
+  clients   Client[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("lead_sources")
+}
+
+// ─── CORE MODULES ────────────────────────────────────────────────────────────
+
+model Property {
+  id              String         @id @default(uuid())
+  referenceNumber String         @unique // e.g. SLS-1234 or RNT-5678
+  title           String
+  description     String?        @db.Text
+  type            ListingType    @default(SALE) // Sale or Rent
+  price           Float          @default(0.0) // Asking price or monthly rent
+  listingViews    Int            @default(0)    // Page view counter
+  
+  // Geography
+  city            String?
+  area            String?        // e.g. Bahria Orchard, DHA Phase 8
+  sectorReference String?        // e.g. Plot 185-A
+  location        String?        // e.g. DHA Phase 8 (for list cards)
+  address         String?        // Full street address
+  
+  // Specs
+  bedrooms        Int            @default(0)
+  bathrooms       Int            @default(0)
+  parking         Int            @default(0)
+  floors          Int            @default(1)
+  size            Float          @default(0.0) // in sq ft
+  builtYear       Int?
+  isFurnished     Boolean        @default(false)
+  
+  approvalStatus  ApprovalStatus @default(PENDING)
+  
+  // Foreign Keys
+  agencyId        String
+  agency          Agency            @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  
+  createdById     String
+  createdBy       User              @relation("PropertyCreator", fields: [createdById], references: [id])
+  
+  assignedToId    String?
+  assignedTo      User?             @relation("PropertyAssignee", fields: [assignedToId], references: [id])
+  
+  propertyTypeId  String?
+  propertyType    PropertyType?     @relation(fields: [propertyTypeId], references: [id])
+  
+  categoryId      String?
+  category        PropertyCategory? @relation(fields: [categoryId], references: [id])
+  
+  listingStatusId String?
+  listingStatus   ListingStatus?    @relation(fields: [listingStatusId], references: [id])
+  
+  // Relations
+  images          PropertyImage[]
+  amenities       PropertyAmenity[]
+  leads           PropertyLead[]    // Clients interested in this property
+  priceHistory    PriceHistory[]    // Price change log
+  viewings        Viewing[]
+  activities      ActivityLog[]
+  deals           Deal[]            // Back-reference required by Prisma (use Deal.propertyId to query)
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("properties")
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  url        String
+  name       String?  // e.g. "Floor plan — level 1", "Elevation 2"
+  isMain     Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  createdAt  DateTime @default(now())
+
+  @@map("property_images")
+}
+
+// Tracks every price change: Listed price → Reduced → etc.
+model PriceHistory {
+  id         String   @id @default(uuid())
+  price      Float
+  note       String?  // e.g. "Listed", "Reduced"
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+
+  @@map("price_history")
+}
+
+// Many-to-many: A client can be a lead for multiple properties
+model PropertyLead {
+  id           String     @id @default(uuid())
+
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  clientId     String
+  client       Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime   @default(now())
+
+  @@unique([propertyId, clientId])
+  @@map("property_leads")
+}
+
+model PropertyAmenity {
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  amenityId  String
+  amenity    Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  
+  @@id([propertyId, amenityId])
+  @@map("property_amenities")
+}
+
+model Client {
+  id              String         @id @default(uuid())
+  referenceNumber String         @unique // e.g. CL-1024
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  type            ClientType     @default(BUYER)
+  stage           LeadStage      @default(NEW)
+  budget          Float          @default(0.0)
+  lastTouchedAt   DateTime?      // "Last Touch" column in UI
+
+  sourceId        String?
+  source          LeadSource?    @relation(fields: [sourceId], references: [id])
+
+  agencyId        String
+  agency          Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  assignedToId    String?
+  assignedTo      User?          @relation("ClientAssignee", fields: [assignedToId], references: [id])
+
+  propertyLeads   PropertyLead[] // Properties this client is interested in
+  deals           Deal[]
+  viewings        Viewing[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("clients")
+}
+
+model Deal {
+  id              String      @id @default(uuid())
+  referenceNumber String      @unique // e.g. DL-2694
+  type            ListingType @default(SALE)
+  stage           DealStage   @default(OFFER_RECEIVED)
+  value           Float       @default(0.0) // Deal value / asking price at time of deal
+
+  propertyId      String?
+  property        Property?   @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  clientId        String?
+  client          Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  agencyId        String
+  agency          Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  assignedToId    String?     // Agent handling the deal
+  assignedTo      User?       @relation("DealAssignee", fields: [assignedToId], references: [id])
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("deals")
+}
+
+model Viewing {
+  id              String         @id @default(uuid())
+  startAt         DateTime
+  endAt           DateTime
+  status          ViewingStatus  @default(SCHEDULED)
+  feedback        String?        @db.Text
+
+  propertyId      String
+  property        Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  clientId        String?
+  client          Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  agencyId        String
+  agency          Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  assignedToId    String?
+  assignedTo      User?          @relation("ViewingAssignee", fields: [assignedToId], references: [id])
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("viewings")
+}
+
+model Document {
+  id              String          @id @default(uuid())
+  name            String
+  fileType        String
+  url             String
+  sizeBytes       Int             @default(0)
+
+  attachedToType  EntityType
+  attachedToId    String
+
+  agencyId        String
+  agency          Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  uploadedById    String
+  uploadedBy      User            @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("documents")
+}
+
+model ActivityLog {
+  id              String          @id @default(uuid())
+  action          String
+
+  entityType      EntityType
+  entityId        String
+
+  propertyId      String?
+  property        Property?       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime        @default(now())
+
+  @@map("activity_logs")
 }
